@@ -50,6 +50,7 @@ public class RCTBluetoothSerialModule extends ReactContextBaseJavaModule
     private static final String DEVICE_READ = "read";
     private static final String DATA_READ = "data";
     private static final String ERROR = "error";
+    private static final String DEVICE_FOUND = "deviceFound";
 
     // Other stuff
     private static final int REQUEST_ENABLE_BLUETOOTH = 1;
@@ -572,7 +573,7 @@ public class RCTBluetoothSerialModule extends ReactContextBaseJavaModule
 
     /**
      * Handle connection success
-     * 
+     *
      * @param msg             Additional message
      * @param connectedDevice Connected device
      */
@@ -605,7 +606,7 @@ public class RCTBluetoothSerialModule extends ReactContextBaseJavaModule
 
     /**
      * handle connection failure
-     * 
+     *
      * @param msg             Additional message
      * @param connectedDevice Connected device
      */
@@ -631,7 +632,7 @@ public class RCTBluetoothSerialModule extends ReactContextBaseJavaModule
 
     /**
      * Handle lost connection
-     * 
+     *
      * @param msg             Message
      * @param connectedDevice Connected device
      */
@@ -648,7 +649,7 @@ public class RCTBluetoothSerialModule extends ReactContextBaseJavaModule
 
     /**
      * Handle error
-     * 
+     *
      * @param e Exception
      */
     void onError(Exception e) {
@@ -717,7 +718,7 @@ public class RCTBluetoothSerialModule extends ReactContextBaseJavaModule
 
     /**
      * Check if is api level 19 or above
-     * 
+     *
      * @return is above api level 19
      */
     private boolean isKitKatOrAbove() {
@@ -726,7 +727,7 @@ public class RCTBluetoothSerialModule extends ReactContextBaseJavaModule
 
     /**
      * Send event to javascript
-     * 
+     *
      * @param eventName Name of the event
      * @param params    Additional params
      */
@@ -740,7 +741,7 @@ public class RCTBluetoothSerialModule extends ReactContextBaseJavaModule
 
     /**
      * Convert BluetoothDevice into WritableMap
-     * 
+     *
      * @param device Bluetooth device
      */
     private WritableMap deviceToWritableMap(BluetoothDevice device) {
@@ -764,7 +765,7 @@ public class RCTBluetoothSerialModule extends ReactContextBaseJavaModule
 
     /**
      * Pair device before kitkat
-     * 
+     *
      * @param device Device
      */
     private void pairDevice(BluetoothDevice device) {
@@ -786,7 +787,7 @@ public class RCTBluetoothSerialModule extends ReactContextBaseJavaModule
 
     /**
      * Unpair device
-     * 
+     *
      * @param device Device
      */
     private void unpairDevice(BluetoothDevice device) {
@@ -808,7 +809,7 @@ public class RCTBluetoothSerialModule extends ReactContextBaseJavaModule
 
     /**
      * Return reject promise for null bluetooth adapter
-     * 
+     *
      * @param promise
      */
     private void rejectNullBluetoothAdapter(Promise promise) {
@@ -820,7 +821,7 @@ public class RCTBluetoothSerialModule extends ReactContextBaseJavaModule
 
     /**
      * Register receiver for device pairing
-     * 
+     *
      * @param rawDevice     Bluetooth device
      * @param requiredState State that we require
      */
@@ -834,7 +835,6 @@ public class RCTBluetoothSerialModule extends ReactContextBaseJavaModule
             @Override
             public void onReceive(Context context, Intent intent) {
                 String action = intent.getAction();
-
                 if (BluetoothDevice.ACTION_BOND_STATE_CHANGED.equals(action)) {
                     final int state = intent.getIntExtra(BluetoothDevice.EXTRA_BOND_STATE, BluetoothDevice.ERROR);
                     final int prevState = intent.getIntExtra(BluetoothDevice.EXTRA_PREVIOUS_BOND_STATE,
@@ -866,6 +866,19 @@ public class RCTBluetoothSerialModule extends ReactContextBaseJavaModule
                             Log.e(TAG, "Cannot unregister receiver", e);
                             onError(e);
                         }
+                    } else if (state == BluetoothDevice.BOND_NONE && prevState == BluetoothDevice.BOND_BONDING) {
+                      if (D)
+                        Log.d(TAG, "Error Connecting to device");
+                      if (mPairDevicePromise != null) {
+                        mPairDevicePromise.reject(new Exception("Error connecting to device"));
+                        mPairDevicePromise = null;
+                      }
+                      try {
+                        mReactContext.unregisterReceiver(this);
+                      } catch (Exception e) {
+                        Log.e(TAG, "Cannot unregister receiver", e);
+                        onError(e);
+                      }
                     }
                 }
             }
@@ -904,7 +917,8 @@ public class RCTBluetoothSerialModule extends ReactContextBaseJavaModule
                         Log.d(TAG, "Discovery extra device (device id: " + rawDevice.getAddress() + ")");
 
                     WritableMap device = deviceToWritableMap(rawDevice);
-                    unpairedDevices.pushMap(device);
+                    sendEvent(DEVICE_FOUND, device);
+//                    unpairedDevices.pushMap(device);
                 } else if (BluetoothAdapter.ACTION_DISCOVERY_FINISHED.equals(action)) {
                     if (D)
                         Log.d(TAG, "Discovery finished");
